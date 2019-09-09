@@ -312,7 +312,8 @@
                 if (bars[i + 1]) {
                     nextElement = bars[i + 1].barElement;
                 }
-                container.insertBefore(bar.barElement, nextElement)
+                container.insertBefore(bar.barElement, nextElement);
+                bar.updateBar();
             }
         }
 
@@ -359,7 +360,7 @@
                 return getElapsedSeconds(this.startTime);
             },
             getRemaining: function () {
-                return this.startCount - this.getElapsed();
+                return this.startCount - this.getElapsed() - 1;
             }
         };
 
@@ -372,7 +373,6 @@
             this.barElement = this._createProgressBarElement();
             this.labelFunc = (function (_bar) { return ""; });
             this.useHTMLLabel = false;
-
         });
         TimerBar.createUniqueName = function (spellTimer) {
             return "TBAR_" + spellTimer.key;
@@ -393,20 +393,21 @@
                 this.barElement.style.height = height;
             },
             updateBar: function () {
-                var text = this.labelFunc(this.spellTimer);
-                if (this.useHTMLLabel) {
-                    this.barElement.children[1].innerHTML = text;
-                } else {
-                    this.barElement.children[1].innerText = text;
+                var delay = 0;
+                if (this.barElement.querySelector(".label-left") !== null) {
+                    delay = (1000 - (Date.now() - this.spellTimer.startTime) % 1000);
                 }
+                setTimeout(() => {
+                    var text = this.labelFunc(this.spellTimer);
+                    if (this.useHTMLLabel) {
+                        this.barElement.children[1].innerHTML = text;
+                    } else {
+                        this.barElement.children[1].innerText = text;
+                    }
 
-                var barDiv = this.barElement.children[0];
-                var percentage = Math.max(0, Math.min(1, this.spellTimer.getRemaining() / this.spellTimer.startCount)) * 100;
-                barDiv.style.width = percentage.toFixed(2) + "%";
-
-                setTimeout(function (barDiv) {
-                    barDiv.style.backgroundColor = "#FF0000";
-                }, Math.max(0, (this.spellTimer.getRemaining() - this.spellTimer.warningCount) * 1000), barDiv);
+                    var percentage = Math.max(0, Math.min(1, this.spellTimer.getRemaining() / this.spellTimer.startCount)) * 100;
+                    this.barElement.children[0].style.width = percentage.toFixed(2) + "%";
+                }, delay);
             },
             _createProgressBarElement: function () {
                 var outerDiv = document.createElement("div");
@@ -419,6 +420,10 @@
                 barDiv.className = "progress-bar";
                 var textDiv = document.createElement("div");
                 textDiv.className = "progress-text";
+
+                setTimeout(function (barDiv) {
+                    barDiv.style.backgroundColor = "#FF0000";
+                }, Math.max(0, (this.spellTimer.getRemaining() - this.spellTimer.warningCount) * 1000), barDiv);
 
                 outerDiv.appendChild(barDiv);
                 outerDiv.appendChild(textDiv);
