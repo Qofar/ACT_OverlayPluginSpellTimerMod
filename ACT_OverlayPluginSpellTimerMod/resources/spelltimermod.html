@@ -1,0 +1,467 @@
+﻿<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <style>
+		* {
+			font-family: Meiryo;
+			font-size: 14px;
+			color: #DED7BE;
+			text-shadow: -1px 0 2px #795516, 0 1px 2px #795516, 1px 0 2px #795516, 0 -1px 2px #795516;
+		}
+		html {
+            /*border: 1px solid rgba(0,0,0,0.1);*/
+			margin: 0;
+			height: 100%;
+			overflow: hidden;
+			background-color: transparent;
+		}
+		body {
+			margin: 0.2em;
+		}
+        .resizeHandle {
+            /* リサイズ用のハンドル
+             * リサイズができる場所はウィンドウ右下の16x16ピクセルの場所
+             * この部分が完全に透明だとマウス入力が透過してしまってサイズを変更できなくなる */
+            background-image: url(handle.png);
+            background-position: bottom right;
+            background-repeat: no-repeat;
+            box-sizing: border-box;
+        }
+        #title {
+            border-bottom: 1px solid #DED7BE;
+        }
+		.progress-outer {
+			box-sizing: border-box;
+			position: relative;
+
+			background-color: rgba(0, 0, 0, 0.2);
+			border: 1px solid rgba(192, 192, 192, 0.75);
+			box-shadow: 0px 0px 1px 1px rgba(0, 0, 0, 0.1);
+			border-radius: 3px;
+			height: 3.5em;
+			margin-top: 1px;
+		}
+		.progress-bar {
+			opacity: 0.75;
+			background-color: purple;
+			position: absolute;
+			height: 100%;
+			border-right: 1px solid rgba(255, 255, 255, 0.7);
+			box-sizing: border-box;
+			border-radius: 3px;
+			overflow: hidden;
+            transition: width 300ms 0s ease-in-out;
+		}
+		.progress-text {
+			position: absolute;
+			width: 100%;
+			display: table;
+			table-layout: fixed;
+			height: 100%;
+		}
+		.label-left {
+			display: table-cell;
+			text-align: left;
+			vertical-align: middle;
+			padding-left: 0.5em;
+			white-space: nowrap;
+		}
+		.label-right {
+			display: table-cell;
+			text-align: right;
+			vertical-align: middle;
+			padding-right: 0.5em;
+				
+			color: #E2EBF5;
+			text-shadow: -1px 0 3px #217AA2, 0 1px 3px #217AA2, 1px 0 3px #217AA2, 0 -1px 3px #217AA2;
+			font-weight: 300;
+			white-space: nowrap;
+		}
+
+		.playername {
+			font-size: 9px;
+			padding-left: 20px;
+			color: #FFFFFF;
+		}
+		.tank {
+			text-shadow: -1px 0 3px #2970f3, 0 1px 3px #2970f3, 1px 0 3px #2970f3, 0 -1px 3px #2970f3;
+		}
+		.dps {
+			text-shadow: -1px 0 3px #ff0308, 0 1px 3px #ff0308, 1px 0 3px #ff0308, 0 -1px 3px #ff0308;
+		}
+		.healer {
+			text-shadow: -1px 0 3px #6bf056, 0 1px 3px #6bf056, 1px 0 3px #6bf056, 0 -1px 3px #6bf056;
+		}
+		.none {
+			text-shadow: -1px 0 3px #000000, 0 1px 3px #000000, 1px 0 3px #000000, 0 -1px 3px #000000;
+		}
+
+        /*
+		div[caster='YOU'],
+		div[caster='unknown'] {
+			display: none;
+		}
+        */
+    </style>
+    <script>
+
+        //
+        // プラグイン側から以下のような ActXiv オブジェクトとしてデータが提供される
+        //
+        // var ActXiv = {
+        //     "timerFrames": [
+        //         {
+        //             "name": "スペルタイマー名",
+        //             "combatant": "YOU", "詠唱したキャラクター名"
+        //             "key": "スペルタイマー名_キャスター名",
+        //             "job": "プレイヤーキャラクターの場合ジョブ名",
+        //             "startTime": "タイマー開始日時(2019-01-01T00:00:00:0000000+09:00)",
+        //             "startCount": タイマーの開始カウント,
+        //             "warningCount": タイマーの警告カウント,
+        //             "expireCount": タイマーの除去カウント,
+        //             "timeLeft": ACTでの経過秒数,
+        //             "color": 色(0xAARRGGBB),
+        //         },
+        //         ...
+        //     ]
+        // };
+        //
+		//
+		// データから以下のようなHTMLが生成される
+		// 
+		// <div class="progress-outer" skill="バトルボイス" caster="Finalfantasy Xiv" job="Brd" role="dps">
+		// 	 <div class="progress-bar" style="width: 52.56%; background-color: rgb(128, 0, 0);"/>
+		// 	 <div class="progress-text">
+		// 	   <span class="label-left">
+		// 	     <span class="timer-name">バトルボイス</span>
+		// 		 <br>
+		// 		 <span class="playername dps">Finalfantasy Xiv</span>
+		// 	   </span>
+		// 	   <span class="label-right timer-remaining">95s</span>
+		//   </div>
+		// </div>
+		//
+        /*
+        // テスト用データ
+        const ActXiv = {
+            "timerFrames": [
+                {
+                    "name": "リジェネ",
+                    "combatant": "none",
+                    "key": "リジェネ_none",
+                    "job": "",
+                    "startTime": "2019-09-07T20:44:00",
+                    "startCount": 180,
+                    "warningCount": 5,
+                    "expireCount": -3,
+                    "timeLeft": 50,
+                    "color": -16711936
+                }
+            ]
+        };
+        function createTimestamp(dSecs) {
+            var jsDate = new Date();
+
+            var delta = 0;
+            if (typeof dSecs == "number") {
+                delta = dSecs * 1000;
+            }
+
+            return jsTime + delta;
+        }
+        */
+
+
+
+		var TANK   = ["Gla", "Pld", "Mrd", "War", "Drk", "Gnb"];
+		var DPS    = ["Pgl", "Mnk", "Lnc", "Drg", "Arc", "Brd", "Rog", "Nin", "Acn", "Smn", "Thm", "Blm", "Mch", "Sam", "Rdm", "Dnc"];
+		var HEALER = ["Cnj", "Whm", "Sch", "Ast"];
+
+
+        // onOverlayStateUpdate イベントを購読
+        document.addEventListener("onOverlayStateUpdate", function (e) {
+            if (!e.detail.isLocked) {
+                displayResizeHandle();
+            } else {
+                hideResizeHandle();
+            }
+        });
+
+        function displayResizeHandle() {
+            document.documentElement.classList.add("resizeHandle");
+        }
+
+        function hideResizeHandle() {
+            document.documentElement.classList.remove("resizeHandle");
+        }
+
+		// onOverlayDataUpdate イベントを購読
+		document.addEventListener("onOverlayDataUpdate", function (e) {
+			update(e.detail);
+            //update(ActXiv);
+		});
+
+        // ★表示の流れ
+        //
+        // ActXiv オブジェクトに新しいタイマーがないかチェック
+        // → timerFrame.onlyMasterTicks && !timerFrame.absoluteTiming なら、最新のタイマーで上書き
+        // → あったらバー作成＆アニメーション開始（アニメーション時間はバーの残り時間）
+        // → 作成したバーを残り時間に応じた場所に挿入
+        // → 作成済みのバーの中に期限切れのものがないかをチェック
+        // → あったら除去
+        // → 最初に戻る
+
+        var bars = [];
+
+        // 表示要素の更新
+        function update(ActXiv) {
+           if (typeof(ActXiv) == 'undefined') { return; }
+
+            if (typeof(ActXiv.timerFrames) != 'undefined') {
+
+                if(ActXiv.timerFrames.length == 0 && bars.length != 0) {
+                    for (var i = 0; i < bars.length; i++) {
+                        bars[i].removeBarElement();
+                    }
+                    bars = [];
+                    return;
+                }
+
+                // 新規タイマー追加
+                var containerDiv = document.getElementById('spelltimer');
+                ActXiv.timerFrames.forEach(function (timerFrame) { 
+                    processActXivTimerEntry(containerDiv, timerFrame);
+                });
+            }
+
+            // バーの更新と期限切れバーの削除
+            var newBars = [];
+            for (var i = 0; i < bars.length; i++) {
+                if (!bars[i].spellTimer.getIsExpired()) { // 期限切れではない
+                    bars[i].updateBar(); // バー更新
+                    newBars.push(bars[i]);
+                } else {
+                    bars[i].removeBarElement(); // バーを親要素から削除
+                }
+            }
+            bars = newBars;
+        }
+
+        function processActXivTimerEntry(container, _tf) {
+            var spellTimer = new SpellTimer(_tf);
+
+            if (spellTimer.getIsExpired()) {
+                return; // 渡されたデータが既に期限切れだった場合は何もせずに次へ
+            };
+
+            var bar = getTimerBarFromList(spellTimer);
+
+            // リセットが必要な場合、既に存在するバーを消して作り直す
+            if (typeof (bar) != 'undefined' && spellTimer.startTime.getTime() != bar.spellTimer.startTime.getTime()) {
+                for (var i = bars.length - 1; i >= 0; i--) {
+                    if (bars[i].spellTimer.key == spellTimer.key) {
+                        bars[i].removeBarElement();
+                        bars.splice(i, 1);
+                        processActXivTimerEntry(container, _tf);
+                    }
+                }
+            }
+
+            if (typeof(bar) == 'undefined') {
+                bar = new TimerBar(spellTimer);
+
+                // テキストの表示方法を設定
+                bar.setBarLabel(function () {
+                    var nameText = spellTimer.name;
+                    var remaining = spellTimer.getRemaining();
+                    var timerText;
+                    if (remaining <= 0) {
+                        timerText = "READY"; // カウントが0以下なら READY と表示
+                    } else {
+                        timerText = spellTimer.getRemaining().toFixed(0) + "s"; // それ以上ならカウントを表示
+                    }
+
+                    return "<span class='label-left'><span class='timer-name'>" + nameText + "</span><br>" + 
+					        "<span class='playername " + spellTimer.role + "'>" + spellTimer.combatant + "</span></span>" +
+                            "<span class='label-right timer-remaining'>" + timerText + "</span>";
+                });
+                bar.useHTMLLabel = true; // HTML で表示する
+                // 色設定
+                bar.setBarColor(getColorCodeFromNumber(bar.spellTimer.color));
+                // バーの高さ設定
+                //bar.setBarHeight(20);
+                
+
+                // 残り時間を考慮してリストに追加
+                var i;
+                var inserted = false;
+                for (i = 0; i < bars.length; i++) {
+                    if (spellTimer.getRemaining() < bars[i].spellTimer.getRemaining()) {
+                        bars.splice(i, 0, bar);
+                        inserted = true;
+                        break;
+                    }
+                }
+                if (!inserted) {
+                    bars.push(bar);
+                }
+
+                // 並び順を考慮してコンテナに追加
+                var nextElement;
+                if (bars[i + 1]) {
+                    nextElement = bars[i + 1].barElement;
+                }
+                container.insertBefore(bar.barElement, nextElement)
+            }
+        }
+
+        function getTimerBarFromList(spellTimer) {
+            var uniqueName = TimerBar.createUniqueName(spellTimer);
+            for (var i = 0; i < bars.length; i++) {
+                if (bars[i].uniqueName == uniqueName) {
+                    return bars[i];
+                }
+            }
+            return;
+        }
+
+        // SpellTimer オブジェクト
+        var SpellTimer = (function (tf) {
+            this.color = tf.color;
+            this.expireCount = tf.expireCount;
+            this.key = tf.key;
+            this.name = tf.name;
+			this.combatant = tf.combatant;
+            this.job = tf.job;
+            this.startCount = tf.startCount;
+            this.warningCount = tf.warningCount;
+            this.startTime = new Date(tf.startTime);
+            if (DPS.indexOf(this.job) > -1) {
+                this.role = "dps";
+            } else if (TANK.indexOf(this.job) > -1) {
+                this.role = "tank";
+            } else if (HEALER.indexOf(this.job) > -1) {
+                this.role = "healer";
+            } else {
+                this.role = "none";
+            }
+        });
+        SpellTimer.prototype = {
+            getIsExpired: function () {
+                if (this.getRemaining() < this.expireCount) {
+                    return true;
+                } else {
+                    return false;
+                }
+            },
+            getElapsed: function() {
+                return getElapsedSeconds(this.startTime);
+            },
+            getRemaining: function () {
+                return this.startCount - this.getElapsed();
+            }
+        };
+
+        // TimerBar オブジェクト
+        var TimerBar = (function (_spellTimer) {
+
+            this.spellTimer = _spellTimer;
+
+            this.uniqueName = TimerBar.createUniqueName(this.spellTimer);
+            this.barElement = this._createProgressBarElement();
+            this.labelFunc = (function (_bar) { return ""; });
+            this.useHTMLLabel = false;
+
+        });
+        TimerBar.createUniqueName = function (spellTimer) {
+            return "TBAR_" + spellTimer.key;
+        }
+        
+        TimerBar.prototype = {
+            setBarLabel: function (strOrFunc) {
+                if (typeof (strOrFunc) == "function") {
+                    this.labelFunc = strOrFunc;
+                } else {
+                    this.labelFunc = function () { return strOrFunc; };
+                }
+            },
+            setBarColor: function (color) {
+                this.barElement.children[0].style.backgroundColor = color;
+            },
+            setBarHeight: function (height) {
+                this.barElement.style.height = height;
+            },
+            updateBar: function () {
+                var text = this.labelFunc(this.spellTimer);
+                if (this.useHTMLLabel) {
+                    this.barElement.children[1].innerHTML = text;
+                } else {
+                    this.barElement.children[1].innerText = text;
+                }
+
+                var barDiv = this.barElement.children[0];
+                var percentage = Math.max(0, Math.min(1, this.spellTimer.getRemaining() / this.spellTimer.startCount)) * 100;
+                barDiv.style.width = percentage.toFixed(2) + "%";
+
+                setTimeout(function (barDiv) {
+                    barDiv.style.backgroundColor = "#FF0000";
+                }, Math.max(0, (this.spellTimer.getRemaining() - this.spellTimer.warningCount) * 1000), barDiv);
+            },
+            _createProgressBarElement: function () {
+                var outerDiv = document.createElement("div");
+                outerDiv.className = "progress-outer";
+				outerDiv.setAttribute("skill", this.spellTimer.name);
+                outerDiv.setAttribute("caster", this.spellTimer.combatant);
+                outerDiv.setAttribute("job", this.spellTimer.job);
+                outerDiv.setAttribute("role", this.spellTimer.role);
+                var barDiv = document.createElement("div");
+                barDiv.className = "progress-bar";
+                var textDiv = document.createElement("div");
+                textDiv.className = "progress-text";
+
+                outerDiv.appendChild(barDiv);
+                outerDiv.appendChild(textDiv);
+
+                return outerDiv;
+            },
+            removeBarElement: function () {
+                this.barElement.parentElement.removeChild(this.barElement);
+            }
+        };
+
+
+        function getElapsedSeconds(startTime) {
+            return (Date.now() - startTime) / 1000;
+        }
+
+        function formatTimeSpan(seconds) {
+
+        }
+
+        function getColorCodeFromNumber(number) {
+            // 各要素を取得
+            var alpha = ((number >> 24) & 0xFF) / 255.0;
+            var red = (number >> 16) & 0xFF;
+            var green = (number >> 8) & 0xFF;
+            var blue = number & 0xFF;
+
+            // rgba(red, green, blue, alpha) 
+            return "rgba(" + red + ", " + green + ", " + blue + ", " + alpha + ")";
+        }
+        
+
+    </script>
+</head>
+<body>
+
+    <div id="title">
+        Timer
+    </div>
+
+    <div id="spelltimer">
+        
+    </div>
+
+</body>
+</html>
