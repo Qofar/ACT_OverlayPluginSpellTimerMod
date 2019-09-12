@@ -33,7 +33,7 @@ namespace ACT_OverlayPluginSpellTimerMod
                     string job = cd.GetColumnByName("Job");
                     if (job != string.Empty)
                     {
-                        NAMEtoJOB[cd.Name] = job;
+                        NAMEtoJOB[cd.Name.ToLower()] = job;
                     }
                 }
             }
@@ -66,11 +66,11 @@ namespace ACT_OverlayPluginSpellTimerMod
             {
                 TimerInfo t = new TimerInfo();
                 t.name = timerFrame.Name;
-                t.combatant = timerFrame.Combatant;
-                t.key = timerFrame.Name + "_" + timerFrame.Combatant.Replace(" ", "_");
+                t.combatant = FormatCharName(timerFrame.Combatant);
+                t.key = timerFrame.Name + "_" + t.combatant.Replace(" ", "_");
 
-                t.timeLeft = timerFrame.GetLargestVal(false);
                 t.startTime = timerFrame.GetMostRecentTime(false).ToString("o"); // ISO 8601 "2019-09-09T01:03:43.7610000+09:00"
+                t.timeLeft = timerFrame.GetLargestVal(false);
 
                 t.startCount = timerFrame.TimerData.TimerValue;
                 t.warningCount = timerFrame.TimerData.WarningValue;
@@ -78,13 +78,10 @@ namespace ACT_OverlayPluginSpellTimerMod
 
                 t.color = timerFrame.TimerData.FillColor.ToArgb();
 
-                foreach (KeyValuePair<string, string> keyValuePair in NAMEtoJOB)
+                string job = string.Empty;
+                if (NAMEtoJOB.TryGetValue(timerFrame.Combatant, out job))
                 {
-                    if (keyValuePair.Key.Equals(timerFrame.Combatant, StringComparison.OrdinalIgnoreCase))
-                    {
-                        t.job = keyValuePair.Value;
-                        t.combatant = keyValuePair.Key;
-                    }
+                    t.job = job;
                 }
                 tf.Add(t);
             }
@@ -97,6 +94,21 @@ namespace ACT_OverlayPluginSpellTimerMod
         {
             return "var ActXiv = { 'timerFrames': " + this.CreateJsonData() + " };\n" +
                "document.dispatchEvent(new CustomEvent('onOverlayDataUpdate', { detail: ActXiv }));";
+        }
+
+        private string FormatCharName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return string.Empty;
+
+            switch (name)
+            {
+                case "you":
+                    return "YOU";
+                case "unknown":
+                    return "unknown";
+                default:
+                    return textinfo.ToTitleCase(name);
+            }
         }
 
         //// JSON用オブジェクト
